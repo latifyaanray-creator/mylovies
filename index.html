@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Friendship Memory Vault 💌</title>
+
+<style>
+body {
+    font-family: Arial;
+    background: #ffe6f0;
+    text-align: center;
+    padding: 20px;
+}
+
+h1 {
+    color: #d63384;
+}
+
+input, textarea {
+    width: 80%;
+    padding: 10px;
+    margin: 10px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+}
+
+button {
+    padding: 10px 20px;
+    background: #d63384;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #ad2167;
+}
+
+.letter {
+    background: white;
+    padding: 15px;
+    margin: 15px auto;
+    width: 80%;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+img, video {
+    width: 100%;
+    max-height: 300px;
+    margin-top: 10px;
+    border-radius: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>💌 Friendship Memory Vault</h1>
+
+<input type="date" id="date"><br>
+
+<textarea id="message" placeholder="Write your memory..."></textarea><br>
+
+<label>📸 Add Photos</label><br>
+<input type="file" id="photos" multiple accept="image/*"><br>
+
+<label>🎥 Add Videos</label><br>
+<input type="file" id="videos" multiple accept="video/*"><br>
+
+<button onclick="saveMemory()">Save Memory 💖</button>
+
+<div id="memories"></div>
+
+<script>
+/* =========================
+   INDEXEDDB SETUP
+========================= */
+let db;
+
+let request = indexedDB.open("FriendshipVaultDB", 1);
+
+request.onupgradeneeded = function(e) {
+    db = e.target.result;
+    db.createObjectStore("memories", { keyPath: "id", autoIncrement: true });
+};
+
+request.onsuccess = function(e) {
+    db = e.target.result;
+    displayMemories();
+};
+
+/* =========================
+   SAVE MEMORY
+========================= */
+function saveMemory() {
+    let date = document.getElementById("date").value;
+    let message = document.getElementById("message").value;
+    let photoFiles = document.getElementById("photos").files;
+    let videoFiles = document.getElementById("videos").files;
+
+    if (!date || !message) {
+        alert("Please add date and message!");
+        return;
+    }
+
+    let photos = [];
+    let videos = [];
+
+    let totalFiles = photoFiles.length + videoFiles.length;
+    let processed = 0;
+
+    function checkDone() {
+        processed++;
+        if (processed === totalFiles) saveToDB();
+    }
+
+    // convert photos
+    if (photoFiles.length === 0 && videoFiles.length === 0) {
+        saveToDB();
+    }
+
+    for (let file of photoFiles) {
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            photos.push(e.target.result);
+            checkDone();
+        };
+        reader.readAsDataURL(file);
+    }
+
+    for (let file of videoFiles) {
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            videos.push(e.target.result);
+            checkDone();
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function saveToDB() {
+        let tx = db.transaction("memories", "readwrite");
+        let store = tx.objectStore("memories");
+
+        store.add({
+            date,
+            message,
+            photos,
+            videos,
+            createdAt: new Date()
+        });
+
+        tx.oncomplete = function() {
+            document.getElementById("message").value = "";
+            document.getElementById("photos").value = "";
+            document.getElementById("videos").value = "";
+            displayMemories();
+        };
+    }
+}
+
+/* =========================
+   DISPLAY MEMORIES
+========================= */
+function displayMemories() {
+    let container = document.getElementById("memories");
+    container.innerHTML = "";
+
+    let tx = db.transaction("memories", "readonly");
+    let store = tx.objectStore("memories");
+
+    let request = store.getAll();
+
+    request.onsuccess = function() {
+        let data = request.result.reverse();
+
+        data.forEach(m => {
+            let div = document.createElement("div");
+            div.className = "letter";
+
+            div.innerHTML = `
+                <h3>📅 ${m.date}</h3>
+                <p>${m.message}</p>
+            `;
+
+            (m.photos || []).forEach(p => {
+                let img = document.createElement("img");
+                img.src = p;
+                div.appendChild(img);
+            });
+
+            (m.videos || []).forEach(v => {
+                let vid = document.createElement("video");
+                vid.src = v;
+                vid.controls = true;
+                div.appendChild(vid);
+            });
+
+            container.appendChild(div);
+        });
+    };
+}
+</script>
+
+</body>
+</html>
